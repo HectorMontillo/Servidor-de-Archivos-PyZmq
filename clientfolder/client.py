@@ -4,6 +4,8 @@ import hashlib
 import sys
 context = zmq.Context()
 
+PS = 1024 * 1024
+
 #  Socket to talk to server
 socket = context.socket(zmq.REQ)
 socket.connect("tcp://localhost:5555")
@@ -15,13 +17,26 @@ def checkIntegrity(file, hash):
     filehash = hashlib.sha256(file).hexdigest()
     print("Hash from file:\t\t"+filehash)
     print("Hash from server:\t"+hash)
-    print("Succefully" if compareHash(filehash, hash) else "An error has occurred, retry the operation")
+    print("Segment Succefully" if compareHash(filehash, hash) else "An error has occurred, retry the operation")
 
 def upload(file):
-    f = open(file, "rb").read()
-    socket.send_multipart([b"upload",file.encode('ascii'), f])
-    message = socket.recv()
-    checkIntegrity(f,message.decode('ascii'))
+    with open(file, 'rb') as f:
+        sha256 = hashlib.sha256()
+        parts = 0
+        while True:
+            segment = f.read(PS)
+            if not segment:
+                socket.send_multipart([b'upload', file.encode('ascii'), b'end'])
+                message = socket.recv()
+                print("Has been upload " + str(parts) + " parts")
+                print(message)
+                break
+            sha256.update(segment)
+            socket.send_multipart([b'upload', file.encode('ascii'), str(parts).encode('ascii'),segment])
+            message = socket.recv()
+            print("Resutl for part " + str(parts))
+            checkIntegrity(segment,message.decode('ascii')) 
+            parts+=1
 
 def download(file):
     socket.send_multipart([b"download",file.encode('ascii')])
