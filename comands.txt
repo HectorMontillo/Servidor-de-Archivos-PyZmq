@@ -1,0 +1,3 @@
+head -c 1G </dev/urandom > myfile
+
+md5sum myfile //Hashh
