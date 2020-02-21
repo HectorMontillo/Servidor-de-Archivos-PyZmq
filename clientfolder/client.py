@@ -26,10 +26,10 @@ def upload(file):
         while True:
             segment = f.read(PS)
             if not segment:
-                socket.send_multipart([b'upload', file.encode('ascii'), b'end'])
+                socket.send_multipart([b'upload', file.encode('ascii'), b'end', sha256.hexdigest().encode('ascii')])
                 message = socket.recv()
                 print("Has been upload " + str(parts) + " parts")
-                print(message)
+                print(message.decode('ascii'))
                 break
             sha256.update(segment)
             socket.send_multipart([b'upload', file.encode('ascii'), str(parts).encode('ascii'),segment])
@@ -40,11 +40,50 @@ def upload(file):
 
 def download(file):
     socket.send_multipart([b"download",file.encode('ascii')])
+    sha256 = hashlib.sha256()
+    while True:
+        message = socket.recv_multipart()
+        state = message[0].decode('ascii')
+        print("Replay message state: " + state)
+        
+        if state == 'end':
+            hashcompleteServer = message[1].decode('ascii')
+            hashcomplete = sha256.hexdigest()
+            print("Hash from server: "+ hashcompleteServer)
+            print("Hash of file: "+ hashcomplete)
+            print("Succefully download!!")
+            break
+        elif state == 'downloading':
+            sha256.update(message[1])
+            newfile = open(file, "ab")
+            newfile.write(message[1])
+            newfile.close()
+        else:
+            print(message[1].decode('ascii'))
+            break
+        
+def download1(file):
+    socket.send_multipart([b"download", b"request",file.encode('ascii')])
+    sha256 = hashlib.sha256()
     message = socket.recv_multipart()
-    checkIntegrity(message[1],message[0].decode('ascii'))
-    newfile = open(file, "wb")
-    newfile.write(message[1])
-    newfile.close()
+
+    if(message[0].decode('ascii') == 'replay'):
+        parts = int(message[1].decode('ascii'))
+        hashFromServer = message[2].decode('ascii')
+        for i in range(parts):
+            socket.send_multipart([b"download", b"index",file.encode('ascii'), str(i).encode('ascii')])
+            downloading = socket.recv_multipart()
+            sha256.update(downloading[1])
+            newfile = open(file, "ab")
+            newfile.write(downloading[1])
+            newfile.close()
+        hashFile = sha256.hexdigest()
+        print("Hash from server : "+ hashFromServer)
+        print("Hash downloaded file : "+hashFile)
+            
+    elif(message[0].decode('ascii') == 'error'):
+        print(message[1].decode('ascii'))
+
 
 def listing():
     socket.send_multipart([b"list"])
@@ -57,6 +96,6 @@ if sys.argv[1] == 'upload':
 elif sys.argv[1] == 'list':
     listing()
 elif sys.argv[1] == 'download':
-    download(sys.argv[2])
+    download1(sys.argv[2])
 
 
