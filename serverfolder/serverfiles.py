@@ -6,6 +6,7 @@ from os import listdir
 import json
 import re
 
+
 context = zmq.Context()
 socket = context.socket(zmq.REP)
 socket.bind("tcp://*:5555")
@@ -97,6 +98,7 @@ def download1(f):
 
 		
 while True:
+
 	f = socket.recv_multipart()
 	if f[0].decode('ascii') == "upload":
 		upload(f)
