@@ -29,6 +29,7 @@ def addServer(request):
     address = request[2].decode('ascii')
     serverDB[address] = capacity
     print("addServer: {}, {}".format(address,capacity))
+    socket.send(b"conected")
 
 def upload(request):
     pass
