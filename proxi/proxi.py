@@ -1,4 +1,5 @@
 import zmq
+import json
 
 context = zmq.Context()
 
@@ -14,25 +15,59 @@ upload parts [hashes]
 download filename
 list
 '''
+# server db
+serverDB = json.load(open("serverDB.json", "r"))
+filesDB = json.load(open("filesDB.json", "r"))
 
-# db structure
 '''
 {
     "ip:port": 10 #10 parts max capacity
 }
 '''
-serverDB = dict()
+#Save current information to json DB
+def deco(data, format='ascii'):
+    return data.decode(format)
+def enco(data, format='ascii'):
+    return data.encode(format)
 
+def saveJSON(db):
+	with open('{}.json'.format(db), 'w') as json_file:
+		json.dump(serverDB, json_file)
 
+#Add a new server
 def addServer(request):
-    capacity = request[1].decode('ascii')
-    address = request[2].decode('ascii')
-    serverDB[address] = capacity
+    capacity = deco(request[1])
+    address = deco(request[2])
+    serverDB[address] = {"capacity": capacity, "parts":[]}
     print("addServer: {}, {}".format(address,capacity))
+    saveJSON('serverDB')
     socket.send(b"conected")
 
+def calc(val,len):
+  return val-len*(val//len)
+  
+def balanceLoad(filename):
+    listparts = filesDB[filename]
+    servers = serverDB.keys()
+    lenServers = len(servers)
+    balance = dict()
+    for i,part in enumerate(listparts):
+        ser = servers[calc(i,lenServers)]
+        if ser in balance.keys():
+            balance[ser].append(part)
+        else:
+            balance[ser] = list(part)
+    return balance
+
+
 def upload(request):
-    pass
+    filename = deco(request[1])
+    filesDB[filename] = list()
+    #socket.send_multipart(list(map(enco,serverDB.keys())))
+    for i, val in enumerate(request):
+        if(i<2): continue
+        filesDB[filename].append(deco(val))
+    balanceLoad(filename)
 
 def download(request):
     pass
@@ -42,7 +77,7 @@ def listing():
 
 while True:
     request = socket.recv_multipart()
-    requestAction = request[0].decode('ascii')
+    requestAction = deco(request[0])
     if requestAction == 'addserver':
         addServer(request)
     elif requestAction == 'upload':

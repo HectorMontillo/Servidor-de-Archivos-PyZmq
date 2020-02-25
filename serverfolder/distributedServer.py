@@ -2,24 +2,26 @@ import zmq
 import sys
 
 
-# ip port capacity proxiadd
-ip = sys.argv[1]
-port = sys.argv[2]
-capacity = sys.argv[3]
-proxiAddress = sys.argv[4]
-address = "{}:{}".format(ip,port)
+# ip capacity proxiadd
+ip = sys.argv[1].split(':')
+capacity = sys.argv[2]
+proxiAddress = sys.argv[3]
+
+
+address = "{}:{}".format(ip[0],ip[1])
 
 # Socket for clients
 context = zmq.Context()
 socket = context.socket(zmq.REP)
-socket.bind("tcp://*:{}".format(port))
+socket.bind("tcp://*:{}".format(ip[1]))
 
 
 # Socket for proxi
 socketProxi = context.socket(zmq.REQ)
 socketProxi.connect("tcp://{}".format(proxiAddress))
 socketProxi.send_multipart([b"addserver", capacity.encode('ascii'), address.encode('ascii')])
-socketProxi.recv()
+response = socketProxi.recv()
+print(response.decode('ascii'))
 
 
 while True:
