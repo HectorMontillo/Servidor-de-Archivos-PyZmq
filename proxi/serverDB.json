@@ -1,1 +1,1 @@
-{"localhost:5555": {"capacity": "100", "files": []}}
+{"localhost:5555": {"capacity": "1000", "parts": []}, "localhost:5557": {"capacity": "100", "parts": []}, "localhost:5558": {"capacity": "1002", "parts": []}}

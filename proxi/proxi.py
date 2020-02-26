@@ -48,15 +48,18 @@ def calc(val,len):
   
 def balanceLoad(filename):
     listparts = filesDB[filename]
-    servers = serverDB.keys()
+    servers = list(serverDB.keys())
     lenServers = len(servers)
     balance = dict()
     for i,part in enumerate(listparts):
+       
         ser = servers[calc(i,lenServers)]
         if ser in balance.keys():
             balance[ser].append(part)
         else:
-            balance[ser] = list(part)
+            balance[ser] = list()
+            balance[ser].append(part)
+            
     return balance
 
 
@@ -67,7 +70,8 @@ def upload(request):
     for i, val in enumerate(request):
         if(i<2): continue
         filesDB[filename].append(deco(val))
-    balanceLoad(filename)
+    socket.send_json(balanceLoad(filename))
+
 
 def download(request):
     pass

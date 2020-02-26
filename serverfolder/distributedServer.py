@@ -1,5 +1,6 @@
 import zmq
 import sys
+import hashlib 
 
 
 # ip capacity proxiadd
@@ -21,8 +22,35 @@ socketProxi = context.socket(zmq.REQ)
 socketProxi.connect("tcp://{}".format(proxiAddress))
 socketProxi.send_multipart([b"addserver", capacity.encode('ascii'), address.encode('ascii')])
 response = socketProxi.recv()
+socketProxi.close()
 print(response.decode('ascii'))
 
+def deco(data, format='ascii'):
+	return data.decode(format)
+def enco(data, format='ascii'):
+	return data.encode(format)
+def getHash(file):
+	return hashlib.sha256(file).hexdigest()
+
+def upload(file):
+	name = getHash(file)
+	newfile = open("files/"+name, "wb")
+	newfile.write(file)
+	newfile.close()
+	socket.send(enco(name))
+
+def download(filename):
+	pass
+
+def listing():
+	pass
 
 while True:
-    pass
+	request = socket.recv_multipart()
+	requestAction = deco(request[0])
+	if requestAction == 'upload':
+		upload(request[1])
+	elif requestAction == 'download':
+		download(deco(request[1]))
+	elif requestAction == 'list':
+		listing()
