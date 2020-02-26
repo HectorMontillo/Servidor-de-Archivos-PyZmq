@@ -1,7 +1,7 @@
 import zmq
 import sys
 import hashlib 
-
+import os
 
 # ip capacity proxiadd
 ip = sys.argv[1].split(':')
@@ -32,9 +32,17 @@ def enco(data, format='ascii'):
 def getHash(file):
 	return hashlib.sha256(file).hexdigest()
 
+def create_directory(name):
+	try:
+		os.mkdir(name)
+		print("Directory " , name ,  " Created ") 
+	except FileExistsError:
+		print("Directory " , name ,  " already exists")
+
 def upload(file):
 	name = getHash(file)
-	newfile = open("files/"+name, "wb")
+	create_directory(address)
+	newfile = open("{}/{}".format(address,name), "wb")
 	newfile.write(file)
 	newfile.close()
 	socket.send(enco(name))
@@ -49,6 +57,7 @@ while True:
 	request = socket.recv_multipart()
 	requestAction = deco(request[0])
 	if requestAction == 'upload':
+		#print(request)
 		upload(request[1])
 	elif requestAction == 'download':
 		download(deco(request[1]))

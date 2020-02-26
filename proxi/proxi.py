@@ -30,17 +30,20 @@ def deco(data, format='ascii'):
 def enco(data, format='ascii'):
     return data.encode(format)
 
-def saveJSON(db):
-	with open('{}.json'.format(db), 'w') as json_file:
-		json.dump(serverDB, json_file)
+def saveJSON(dbname,db):
+	with open('{}.json'.format(dbname), 'w') as json_file:
+		json.dump(db, json_file)
 
 #Add a new server
 def addServer(request):
     capacity = deco(request[1])
     address = deco(request[2])
-    serverDB[address] = {"capacity": capacity, "parts":[]}
-    print("addServer: {}, {}".format(address,capacity))
-    saveJSON('serverDB')
+    if not address in serverDB.keys():
+        serverDB[address] = {"capacity": capacity, "parts":[]}
+        print("addServer: {}, {}".format(address,capacity))
+    else:
+        print("addServer: {} is already registered")
+    saveJSON('serverDB',serverDB)
     socket.send(b"conected")
 
 def calc(val,len):
@@ -59,7 +62,8 @@ def balanceLoad(filename):
         else:
             balance[ser] = list()
             balance[ser].append(part)
-            
+        serverDB[ser]["parts"].append(part)
+    saveJSON('serverDB',serverDB)   
     return balance
 
 
@@ -71,7 +75,7 @@ def upload(request):
         if(i<2): continue
         filesDB[filename].append(deco(val))
     socket.send_json(balanceLoad(filename))
-
+    saveJSON('filesDB', filesDB)
 
 def download(request):
     pass
@@ -83,8 +87,10 @@ while True:
     request = socket.recv_multipart()
     requestAction = deco(request[0])
     if requestAction == 'addserver':
+        print(request)
         addServer(request)
     elif requestAction == 'upload':
+        print(request)
         upload(request)
     elif requestAction == 'download':
         download(request)
