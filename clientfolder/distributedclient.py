@@ -77,6 +77,17 @@ def distributed_upload(file, balance):
 
 def download(file):
     socketProxi.send_multipart([b"download",file.encode('ascii')])
+    response = socketProxi.recv_json()
+    if response["error"]:
+        print(response["error"])
+    else:
+        distributed_download(response)
+
+def distributed_download(response):
+    print(response)
+
+    '''
+    socketProxi.send_multipart([b"download",file.encode('ascii')])
     sha256 = hashlib.sha256()
     while True:
         message = socketProxi.recv_multipart()
@@ -98,30 +109,7 @@ def download(file):
         else:
             print(message[1].decode('ascii'))
             break
-        
-def download1(file):
-    socketProxi.send_multipart([b"download", b"request",file.encode('ascii')])
-    sha256 = hashlib.sha256()
-    message = socketProxi.recv_multipart()
-
-    if(message[0].decode('ascii') == 'replay'):
-        parts = int(message[1].decode('ascii'))
-        hashFromServer = message[2].decode('ascii')
-        for i in range(parts):
-            socketProxi.send_multipart([b"download", b"index",file.encode('ascii'), str(i).encode('ascii')])
-            downloading = socketProxi.recv_multipart()
-            sha256.update(downloading[1])
-            newfile = open(file, "ab")
-            newfile.write(downloading[1])
-            newfile.close()
-        hashFile = sha256.hexdigest()
-        print("Hash from server : "+ hashFromServer)
-        print("Hash downloaded file : "+hashFile)
-            
-    elif(message[0].decode('ascii') == 'error'):
-        print(message[1].decode('ascii'))
-
-
+    '''
 def listing():
     socketProxi.send_multipart([b"list"])
     message = socketProxi.recv_multipart()
@@ -134,6 +122,6 @@ if sys.argv[1] == 'upload':
 elif sys.argv[1] == 'list':
     listing()
 elif sys.argv[1] == 'download':
-    download1(sys.argv[2])
+    download(sys.argv[2])
 
 

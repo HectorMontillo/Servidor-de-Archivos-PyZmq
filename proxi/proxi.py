@@ -79,9 +79,11 @@ def upload(request):
 
 def download(request):
     name = deco(request[1])
-    hashes = filesDB[name]
-    socket.send_json(find_servers(hashes))
-
+    if name in filesDB[name].keys()
+        hashes = filesDB[name]
+        socket.send_json(find_servers(hashes))
+    else:
+        socket.send_json({"error":"the file does not exist!"})
 def find_servers(hashes):
     download_servers = {
         "hash": hashes,
