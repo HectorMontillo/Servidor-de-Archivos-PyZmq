@@ -78,10 +78,27 @@ def upload(request):
     saveJSON('filesDB', filesDB)
 
 def download(request):
-    pass
+    name = deco(request[1])
+    hashes = filesDB[name]
+    socket.send_json(find_servers(hashes))
+
+def find_servers(hashes):
+    download_servers = {
+        "hash": hashes,
+        "server": []
+    }
+    for h in hashes:
+        for ser in serverDB.keys():
+            if h in serverDB[ser]["parts"]:
+                download_servers["server"].append = ser
+                break
+    print(download_servers)
+    return download_servers
+
 
 def listing():
-    pass
+    files = list(map(enco,list(filesDB.keys())))
+    socket.send_multipart(files)
 
 while True:
     request = socket.recv_multipart()

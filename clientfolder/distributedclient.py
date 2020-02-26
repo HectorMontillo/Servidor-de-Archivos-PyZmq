@@ -124,9 +124,10 @@ def download1(file):
 
 def listing():
     socketProxi.send_multipart([b"list"])
-    message = socketProxi.recv()
+    message = socketProxi.recv_multipart()
     print("Your files : ")
-    print(message.decode('ascii'))  
+    for i in message:
+        print(deco(i))  
 
 if sys.argv[1] == 'upload':
     upload(sys.argv[2])
