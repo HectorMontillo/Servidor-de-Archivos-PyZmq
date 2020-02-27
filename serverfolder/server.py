@@ -45,10 +45,11 @@ def upload(file):
 	newfile = open("{}/{}".format(address,name), "wb")
 	newfile.write(file)
 	newfile.close()
-	socket.send(enco(name))
+	socket.send_multipart([enco(name)])
 
-def download(filename):
-	pass
+def download(hashfile):
+	with open(address+"/"+hashfile, "rb") as file:
+		socket.send_multipart([file.read()])
 
 def listing():
 	pass
@@ -57,7 +58,6 @@ while True:
 	request = socket.recv_multipart()
 	requestAction = deco(request[0])
 	if requestAction == 'upload':
-		#print(request)
 		upload(request[1])
 	elif requestAction == 'download':
 		download(deco(request[1]))

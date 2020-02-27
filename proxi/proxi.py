@@ -50,7 +50,7 @@ def calc(val,len):
   return val-len*(val//len)
   
 def balanceLoad(filename):
-    listparts = filesDB[filename]
+    listparts = filesDB[filename]['parts']
     servers = list(serverDB.keys())
     lenServers = len(servers)
     balance = dict()
@@ -69,34 +69,36 @@ def balanceLoad(filename):
 
 def upload(request):
     filename = deco(request[1])
-    filesDB[filename] = list()
-    #socket.send_multipart(list(map(enco,serverDB.keys())))
+    filesDB[filename] = {
+        "hash":deco(request[2]),
+        "parts":list()
+    }
     for i, val in enumerate(request):
-        if(i<2): continue
-        filesDB[filename].append(deco(val))
+        if(i<3): continue
+        filesDB[filename]['parts'].append(deco(val))
     socket.send_json(balanceLoad(filename))
     saveJSON('filesDB', filesDB)
 
 def download(request):
     name = deco(request[1])
-    if name in filesDB[name].keys()
-        hashes = filesDB[name]
-        socket.send_json(find_servers(hashes))
+    if name in filesDB.keys():
+        parts = filesDB[name]['parts']
+        hashC = filesDB[name]['hash']
+        socket.send_json(find_servers(hashC,parts))
     else:
         socket.send_json({"error":"the file does not exist!"})
-def find_servers(hashes):
+def find_servers(hashC,partes):
     download_servers = {
-        "hash": hashes,
+        "hash": hashC,
+        "parts": partes,
         "server": []
     }
-    for h in hashes:
+    for h in partes:
         for ser in serverDB.keys():
             if h in serverDB[ser]["parts"]:
-                download_servers["server"].append = ser
+                download_servers["server"].append(ser)
                 break
-    print(download_servers)
     return download_servers
-
 
 def listing():
     files = list(map(enco,list(filesDB.keys())))
@@ -106,10 +108,8 @@ while True:
     request = socket.recv_multipart()
     requestAction = deco(request[0])
     if requestAction == 'addserver':
-        print(request)
         addServer(request)
     elif requestAction == 'upload':
-        print(request)
         upload(request)
     elif requestAction == 'download':
         download(request)
