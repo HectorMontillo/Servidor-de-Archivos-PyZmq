@@ -61,11 +61,14 @@ class Chord_Server:
 				pass
 			elif requestAction == 'list':
 				pass
+			elif requestAction == 'state':
+				self.state()
 
 	def run(self):
 		if self.successor_server_address == 'genesis':
 			print("Genesis server has been initialized!!")
 			print("Name: {}, Address: {}".format(self.name, self.address))
+			self.successor_server_address = self.address
 		else:
 			self.join_to_ring()
 		self.loop()
@@ -146,6 +149,15 @@ class Chord_Server:
 		self.successor_server_address = address
 		self.socket.send_multipart([b'success update'])
 		
+	def state(self):
+		state = {
+			'name': str(self.name),
+			'address': self.address,
+			'lim': self.lim,
+			'successor': self.successor_server_address,
+			'predecessor': self.predecessor_server_address
+		}
+		self.socket.send_json(state)
 
 	def deco_and_int(self, data):
 		return int(self.coder.deco(data))
