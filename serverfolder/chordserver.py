@@ -60,7 +60,7 @@ class Chord_Server:
 			elif requestAction == 'successor':
 				self.successor_update(self.coder.deco(request[1]))
 			elif requestAction == 'upload':
-				pass
+				self.upload(self.coder.deco(request[1]),request[2])
 			elif requestAction == 'download':
 				pass
 			elif requestAction == 'list':
@@ -163,6 +163,19 @@ class Chord_Server:
 		print("My lim: ")
 		print(self.lim)
 		
+	def check_segment(self,name_segment):
+		number_segment = int(name_segment,16)
+		if (number_segment >= self.lim[0] and number_segment <= self.lim[1]):
+			return True
+		else:
+			try:
+				if (number_segment >= self.lim[2] and number_segment <= self.lim[3]):
+					return True
+				else:
+					return False
+			except IndexError:
+				return False
+
 	def rejoin_server(self,address):
 		self.successor_server_address = address
 		self.join_to_ring()
@@ -175,6 +188,19 @@ class Chord_Server:
 	def successor_update(self, address):
 		self.successor_server_address = address
 		self.socket.send_multipart([b'success update'])
+
+	def create_segment(self, name_segment, segment):
+		self.create_directory()
+		with open("{}/{}".format(self.address,name_segment), "wb") as f:
+			f.write(segment)
+
+	def upload(self, name_segment, segment):
+		if (self.check_segment(name_segment)):
+			self.create_segment(name_segment, segment)
+			self.socket.send_multipart([b'success upload'])
+		else:
+			self.socket.send_multipart([b'failure upload', self.coder.enco(self.successor_server_address)])
+
 		
 	def state(self):
 		state = {
@@ -195,22 +221,23 @@ class Chord_Server:
 	def deco_list(self, lista):
 		return list(map(self.coder.deco,lista))
 
-	def create_directory(self,name):
-		pass
-		'''
+	def create_directory(self):
 		try:
-			os.mkdir(name)
-			print("Directory " , name ,  " Created ") 
+			os.mkdir(self.address)
+			print("Directory " , self.address ,  " Created ") 
 		except FileExistsError:
-			print("Directory " , name ,  " already exists")
-		'''
+			print("Using", self.address, "directory")
+
 	def encode_name(self,i=0):
 		return self.coder.enco(str(self.name+i))
 	
 	def log(self,req, att='General Socket'):
 		print("{}: {}".format(self.coder.deco(req[0]),att))
 		for i in req[1:]:
-			print("--> "+self.coder.deco(i))
+			try:
+				print("--> "+self.coder.deco(i))
+			except:
+				print("--> Binary data")
 
 if __name__ == "__main__":
 	server_address = sys.argv[1]

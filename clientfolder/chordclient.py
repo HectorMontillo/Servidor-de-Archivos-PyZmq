@@ -29,21 +29,28 @@ class Chord_Client:
 		self.context = zmq.Context()
 		#Utilidades
 		self.coder = Code('ascii')
-		self.naming = Sha('1')
+		self.hasher = Sha(256)
 
 	def run(self):
+		
 		try:
 			command = sys.argv[1]
 		except:
-			print('You must use an action: upload, download or list')
-		
+			print('You must use an action: upload or download')
+		'''
 		if (command == 'state'):
 				try:
 					address = sys.argv[2]
 				except:
 					print('You must indicate the server address')
 				self.state(address)
-		
+		'''
+		if command == 'state':
+			self.state(sys.argv[2])
+		elif command == 'upload':
+			self.upload(sys.argv[2], sys.argv[3])
+
+
 	def send_request(self, req, address, send='multipart', recv='multipart'):
 		socket = self.context.socket(zmq.REQ)
 		socket.connect("tcp://"+address)
@@ -60,6 +67,36 @@ class Chord_Client:
 
 		socket.close()
 		return res
+
+	def upload_segment(self,name_file, segment, server_address):
+		name_segment = hashlib.sha1(segment).hexdigest()
+		#print(name_segment, type(name_segment))
+		request = [b'upload',self.coder.enco(name_segment),segment]
+		address = server_address
+		while True:
+			response = self.send_request(request,address)
+			if self.coder.deco(response[0]) == 'success upload':
+				print("Segment was upload: {} on server {}".format(name_segment,address))
+				f = open(name_file+".chord", "a")
+				f.write(name_segment+" "+address+"\n")
+				f.close()
+				return True
+			else:
+				address = self.coder.deco(response[1])
+				if address == server_address:
+					return False
+
+	def upload(self, name_file, server_address):
+		with open(name_file, 'rb') as f:
+				while True:
+						segment = f.read(PS)
+						if not segment:
+							print("The file was upload!")
+							break
+						res = self.upload_segment(name_file,segment, server_address)
+						if not res:
+							print("The upload was canceled")
+							break
 
 	def state(self, address):
 		request = [b'state']

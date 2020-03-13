@@ -1,2 +1,4 @@
 serverfolder/pruebas.py
 prueba.py
+clientfolder/myfile*
+serverfolder/*:????
