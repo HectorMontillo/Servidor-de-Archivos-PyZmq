@@ -34,7 +34,7 @@ class Chord_Server:
 		# Atributos
 		self.name = self.generate_name(40)
 		self.address = address
-		self.lim = self.genesis() if connect=='genesis' else None
+		self.lim = [self.name+1,LIMIT,0,self.name] if connect=='genesis' else None
 		#ZMQ
 		#General Socket for listen Request
 		self.context = zmq.Context()
@@ -53,6 +53,10 @@ class Chord_Server:
 			requestAction = self.coder.deco(request[0])
 			if requestAction == 'join':
 				self.join_server(int(self.coder.deco(request[1])),self.coder.deco(request[2]))
+			elif requestAction == 'left successor':
+				self.left_to_ring(self.deco_list(request))
+			elif requestAction == 'left predecessor':
+				self.left_predecessor(self.coder.deco(request[1]))
 			elif requestAction == 'successor':
 				self.successor_update(self.coder.deco(request[1]))
 			elif requestAction == 'upload':
@@ -73,8 +77,18 @@ class Chord_Server:
 			self.join_to_ring()
 		self.loop()
 	
-	def genesis(self):
-		return [self.name+1,LIMIT,0,self.name]
+	def down(self):
+		if (self.successor_server_address == self.address):
+			print("Ultimo servidor del anillo apagado!")
+		else:
+			print("Servidor Apagado")
+			request = [b'left successor', self.coder.enco(self.predecessor_server_address)]+self.enco_list(self.lim[:-1])
+			response = self.successor_send_request(request)
+			self.log(response,'Response successor')
+
+			request = [b'left predecessor', self.coder.enco(self.successor_server_address)]
+			response = self.predecessor_send_request(request)
+			self.log(response, 'Response predecessor')
 
 	def generate_name(self,length):
 		return int(self.naming.getHash(self.coder.enco(self.generate_random_string(40))),16)
@@ -86,63 +100,76 @@ class Chord_Server:
 			string+=chr(char)
 		return string
 	
-	def join_to_ring(self):
+	def successor_send_request(self,req):
 		self.successor_server_socket = self.context.socket(zmq.REQ)
 		self.successor_server_socket.connect("tcp://{}".format(self.successor_server_address))
-		self.successor_server_socket.send_multipart([b"join", self.encode_name(), self.coder.enco(self.address)])
+		self.successor_server_socket.send_multipart(req)
 		response = self.successor_server_socket.recv_multipart()
-		print("Server has been initialized!!")
-		print("Name: {}, Address: {}".format(self.name, self.address))
+		self.successor_server_socket.close()
+		return response
+
+	def predecessor_send_request(self,req):
+		self.predecessor_server_socket = self.context.socket(zmq.REQ)
+		self.predecessor_server_socket.connect("tcp://{}".format(self.predecessor_server_address))
+		self.predecessor_server_socket.send_multipart(req)
+		response = self.predecessor_server_socket.recv_multipart()
+		self.predecessor_server_socket.close()
+		return response
+
+	def left_to_ring(self, request):
+		self.predecessor_server_address = request[1]
+		newlim = request[2:]+self.lim[1:]
+		self.lim = list(map(int,newlim))
+		print("My lim: ")
+		print(self.lim)
+		self.socket.send_multipart([b'left success'])
+
+	def left_predecessor(self,successor_server_address):
+		self.successor_server_address = successor_server_address
+		self.socket.send_multipart([b'left success'])
+			
+	def join_to_ring(self):
+		request = [b"join", self.encode_name(), self.coder.enco(self.address)]
+		response = self.successor_send_request(request)
 		self.log(response,'Response Successor')
 		if(self.coder.deco(response[0]) == 'success'):
+			print("Server has been initialized!!")
+			print("Name: {}, Address: {}".format(self.name, self.address))
 			self.lim = list(map(self.deco_and_int, response[1:-1]))
 			self.predecessor_server_address = self.coder.deco(response[-1])
 			self.notify_successor()
 		else:
 			self.successor_server_address = self.coder.deco(response[1])
 			self.join_to_ring()
-		#print(self.coder.deco(response[0]), self.coder.deco(response[1]))
 		
 	def join_server(self,server_num, server_address):
-		if len(self.lim) == 4:
-			if (server_num >= self.lim[0] and server_num <= self.lim[1]) or (server_num >= self.lim[2] and server_num <= self.lim[3]):
-				if(server_num > self.name):
-					res_lim = [self.encode_name(1), self.coder.enco(str(server_num)), self.coder.enco(self.predecessor_server_address)]
-					self.socket.send_multipart([b"success"]+res_lim)
-					self.lim[0] = server_num+1
-					self.predecessor_server_address = server_address
-				else:
+		if (server_num >= self.lim[0] and server_num <= self.lim[1]):
+			res_lim = [self.coder.enco(str(self.lim[0])),self.coder.enco(str(server_num)), self.coder.enco(self.predecessor_server_address)]
+			self.socket.send_multipart([b"success"]+res_lim)
+			self.lim[0] = server_num+1
+			self.predecessor_server_address = server_address
+		else:
+			try:
+				if (server_num >= self.lim[2] and server_num <= self.lim[3]):
 					res_lim = [self.coder.enco(str(self.lim[0])), self.coder.enco(str(self.lim[1])), self.coder.enco(str(self.lim[2])), self.coder.enco(str(server_num)), self.coder.enco(self.predecessor_server_address)]
 					self.socket.send_multipart([b"success"]+res_lim)
 					self.lim = [server_num+1, self.name]
 					self.predecessor_server_address = server_address
-			else:
+				else:
+					self.socket.send_multipart([b"rejoin", self.coder.enco(self.successor_server_address)])
+			except IndexError:
 				self.socket.send_multipart([b"rejoin", self.coder.enco(self.successor_server_address)])
-		else:
-			if(server_num >= self.lim[0] and server_num <= self.lim[1]):
-				res_lim = [self.coder.enco(str(self.lim[0])),self.coder.enco(str(server_num)), self.coder.enco(self.predecessor_server_address)]
-				self.socket.send_multipart([b"success"]+res_lim)
-				self.lim[0] = server_num+1
-				self.predecessor_server_address = server_address
-			else:
-				self.socket.send_multipart([b"rejoin", self.coder.enco(self.successor_server_address)])
-
+				
 		print("My lim: ")
 		print(self.lim)
 		
 	def rejoin_server(self,address):
 		self.successor_server_address = address
 		self.join_to_ring()
-		
-	def success(self, lim):
-		self.lim = list(map(self.deco_and_int,lim))
-		print(self.lim)
 
 	def notify_successor(self):
-		self.predecessor_server_socket = self.context.socket(zmq.REQ)
-		self.predecessor_server_socket.connect("tcp://{}".format(self.predecessor_server_address))
-		self.predecessor_server_socket.send_multipart([b"successor", self.coder.enco(self.address)])
-		response = self.predecessor_server_socket.recv_multipart()
+		request = [b"successor", self.coder.enco(self.address)]
+		response = self.predecessor_send_request(request)
 		self.log(response,'Response Predecessor')
 
 	def successor_update(self, address):
@@ -161,6 +188,12 @@ class Chord_Server:
 
 	def deco_and_int(self, data):
 		return int(self.coder.deco(data))
+
+	def enco_list(self, lista):
+		return list(map(self.coder.enco,map(str, lista)))
+
+	def deco_list(self, lista):
+		return list(map(self.coder.deco,lista))
 
 	def create_directory(self,name):
 		pass
@@ -186,4 +219,7 @@ if __name__ == "__main__":
 	except:
 		successor_server_address = 'genesis'
 	server = Chord_Server(server_address,successor_server_address)
-	server.run()
+	try:
+		server.run()
+	except KeyboardInterrupt:
+		server.down()
