@@ -1,6 +1,7 @@
 import zmq
 import hashlib 
 import sys
+import os
 
 PS = 1024 * 1024
 
@@ -37,18 +38,13 @@ class Chord_Client:
 			command = sys.argv[1]
 		except:
 			print('You must use an action: upload or download')
-		'''
-		if (command == 'state'):
-				try:
-					address = sys.argv[2]
-				except:
-					print('You must indicate the server address')
-				self.state(address)
-		'''
+
 		if command == 'state':
 			self.state(sys.argv[2])
 		elif command == 'upload':
 			self.upload(sys.argv[2], sys.argv[3])
+		elif command == 'download':
+			self.download(sys.argv[2], sys.argv[3])
 
 
 	def send_request(self, req, address, send='multipart', recv='multipart'):
@@ -68,7 +64,7 @@ class Chord_Client:
 		socket.close()
 		return res
 
-	def upload_segment(self,name_file, segment, server_address):
+	def upload_segment(self,name_file, segment, server_address, save= True):
 		name_segment = hashlib.sha1(segment).hexdigest()
 		#print(name_segment, type(name_segment))
 		request = [b'upload',self.coder.enco(name_segment),segment]
@@ -77,26 +73,120 @@ class Chord_Client:
 			response = self.send_request(request,address)
 			if self.coder.deco(response[0]) == 'success upload':
 				print("Segment was upload: {} on server {}".format(name_segment,address))
-				f = open(name_file+".chord", "a")
-				f.write(name_segment+" "+address+"\n")
-				f.close()
+				if save:
+					f = open(name_file+".chord", "a")
+					f.write(name_segment+"\n")
+					f.close()
 				return True
 			else:
 				address = self.coder.deco(response[1])
 				if address == server_address:
 					return False
 
+	def finish_chord_file(self, name_file, complete_hash):
+		f = open(name_file+".chord", "r")
+		lines = f.readlines()
+		lines.insert(0,complete_hash+'\n')
+		lines.insert(0,name_file+'\n')
+		f.close()
+
+		f = open(name_file+".chord", "w")
+		f.writelines(lines)
+		f.close()
+
+	def upload_chord_file(self, name_file, server_address):
+		with open(name_file, 'rb') as f:
+			chord_data = f.read()
+			hash_chord_file = hashlib.sha1(chord_data).hexdigest()
+			res = self.upload_segment(hash_chord_file,chord_data,server_address,save=False)
+			if res:
+				print('Magnet link is already!: '+ hash_chord_file)
+			else:
+				print('An error has occurred trying to generate magnet link')
+
+
 	def upload(self, name_file, server_address):
 		with open(name_file, 'rb') as f:
-				while True:
-						segment = f.read(PS)
-						if not segment:
-							print("The file was upload!")
-							break
-						res = self.upload_segment(name_file,segment, server_address)
-						if not res:
-							print("The upload was canceled")
-							break
+			sha1 = hashlib.sha1()
+			while True:
+				segment = f.read(PS)
+				if not segment:
+					self.finish_chord_file(name_file,	sha1.hexdigest())
+					self.upload_chord_file(name_file+".chord",server_address)
+					print("The file was upload!")
+					break
+				sha1.update(segment)
+				res = self.upload_segment(name_file,segment, server_address)
+				if not res:
+					print("The upload was canceled")
+					break
+
+	def download_segment(self,name_file,name_segment,server_address):
+		request = [b'download',self.coder.enco(name_segment)]
+		address = server_address
+		while True:
+			response = self.send_request(request,address)
+			if self.coder.deco(response[0]) == 'success download':
+				with open(name_file, 'ab') as f:
+					f.write(response[1])
+				return True
+			elif self.coder.deco(response[0]) == 'file not found error':
+				print("Segment not found!")
+				return False
+			else:
+				address = self.coder.deco(response[1])
+				if address == server_address:
+					print("Hash out of limits!")
+					return False
+
+	def clear_file(self,name_file):
+		f = open(name_file, 'w')
+		f.write('')
+		f.close()
+
+	def download(self,chord_file, server_address):
+		if '.chord' in chord_file:
+			with open(chord_file, 'r') as f:
+				lines = f.readlines()
+				name_file = lines.pop(0)[:-1]
+				complete_hash = lines.pop(0)[:-1]
+				cont = 0
+				self.clear_file(name_file)
+				for name_segment in lines:
+					name_segment = name_segment[:-1]
+					print(cont, name_segment)
+					cont += 1
+					res = self.download_segment(name_file,name_segment,server_address)
+					if not res:
+						print('Donwload was canceled, an error has occurred')
+						break
+				self.check_integrity(complete_hash, name_file)
+				print('Donwload finished!')
+		else:
+			if len(chord_file) == 40:
+				print("Downloading with magnet link!")
+				res = self.download_segment('temp.chord',chord_file,server_address)
+				if not res:
+					print("Magnet link invalid!")
+				else:
+					self.download('temp.chord',server_address)
+					os.remove('temp.chord')
+			else:
+				print("Cord file or magnet link invalid")
+
+	
+	def check_integrity(self,complete_hash, name_file):
+		with open(name_file, "rb") as f:
+			sha1 = hashlib.sha1()
+			while True:
+				segment = f.read(PS)
+				if not segment:
+					if sha1.hexdigest() == complete_hash:
+						print("Succefully download: \nHash registered:\t{}\nHash download:\t{}".format(complete_hash,sha1.hexdigest()))
+					else:
+						print("Failure download: File corrupted!")
+					break
+				sha1.update(segment)
 
 	def state(self, address):
 		request = [b'state']

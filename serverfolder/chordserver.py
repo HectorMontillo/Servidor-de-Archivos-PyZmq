@@ -62,7 +62,7 @@ class Chord_Server:
 			elif requestAction == 'upload':
 				self.upload(self.coder.deco(request[1]),request[2])
 			elif requestAction == 'download':
-				pass
+				self.download(self.coder.deco(request[1]))
 			elif requestAction == 'list':
 				pass
 			elif requestAction == 'state':
@@ -201,7 +201,27 @@ class Chord_Server:
 		else:
 			self.socket.send_multipart([b'failure upload', self.coder.enco(self.successor_server_address)])
 
-		
+	def download(self, name_segment):
+		if (self.check_segment(name_segment)):
+			try:
+				with open("{}/{}".format(self.address,name_segment), "rb") as f:
+					segment = f.read()
+					self.socket.send_multipart([b'success download',segment])
+			except FileNotFoundError:
+				self.socket.send_multipart([b'file not found error'])
+		else:
+			self.socket.send_multipart([b'failure download', self.coder.enco(self.successor_server_address)])
+
+		'''
+		try:
+			print(name_segment)
+			with open("{}/{}".format(self.address,name_segment), "rb") as f:
+				segment = f.read()
+				self.socket.send_multipart([b'success',segment])
+		except FileNotFoundError:
+	
+			self.socket.send_multipart([b'file not found error'])
+		'''
 	def state(self):
 		state = {
 			'name': str(self.name),
