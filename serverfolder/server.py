@@ -61,6 +61,8 @@ class Chord_Server:
 				self.successor_update(self.coder.deco(request[1]))
 			elif requestAction == 'transfer':
 				self.transfer()
+			elif requestAction == 'transfer left':
+				print("Adios bebe")
 			elif requestAction == 'transfer file':
 				self.download(self.coder.deco(request[1]),delete=True)
 			elif requestAction == 'upload':
@@ -85,6 +87,7 @@ class Chord_Server:
 		if (self.successor_server_address == self.address):
 			print("Ultimo servidor del anillo apagado!")
 		else:
+			self.transfer_files_left()
 			request = [b'left successor', self.coder.enco(self.predecessor_server_address)]+self.enco_list(self.lim[:-1])
 			response = self.successor_send_request(request)
 			self.log(response,'Response successor')
@@ -123,9 +126,6 @@ class Chord_Server:
 	def left_to_ring(self, request):
 		newlim = request[2:]+self.lim[1:]
 		self.lim = list(map(int,newlim))
-
-		self.transfer_files(successor=False)
-
 		self.predecessor_server_address = request[1]
 		self.socket.send_multipart([b'left success'])
 		
@@ -149,12 +149,32 @@ class Chord_Server:
 			self.successor_server_address = self.coder.deco(response[1])
 			self.join_to_ring()
 		
+	def transfer_files_left(self):
+		try:
+			files = os.listdir('{}/'.format(self.address))
+			res = self.upload_files(files)
+		except FileNotFoundError:
+			print("There aren't files to tranfer")
+
+	def upload_files(self, files):
+		for name_file in files:
+			with open("{}/{}".format(self.address,name_file), "rb") as f:
+				data = f.read()
+				request = [b'upload transfer file', data]
+				response = self.successor_send_request(request)
+				#-------------- sin terminar
+				
+
+
 	def transfer_files(self, successor=True):
 		request = [b'transfer']
 		if successor:
 			response = self.successor_send_request(request)
 		else:
+			print('Enviando request')
 			response = self.predecessor_send_request(request)
+			print('Enviada request')
+			
 
 		self.log(response,'Response successor')
 		if self.coder.deco(response[0]) == 'files':
