@@ -37,7 +37,8 @@ def create_directory(name):
 		os.mkdir(name)
 		print("Directory " , name ,  " Created ") 
 	except FileExistsError:
-		print("Directory " , name ,  " already exists")
+		pass
+	#print("Directory " , name ,  " already exists")
 
 def upload(file):
 	name = getHash(file)

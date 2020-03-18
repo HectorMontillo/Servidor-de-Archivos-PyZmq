@@ -23,8 +23,8 @@ def getHash(file):
 
 def checkIntegrity(file, hash):
     filehash = hashlib.sha256(file).hexdigest()
-    print("Hash from file:\t\t"+filehash)
-    print("Hash from server:\t"+hash)
+    #print("Hash from file:\t\t"+filehash)
+    #print("Hash from server:\t"+hash)
     print("Segment Succefully" if compareHash(filehash, hash) else "An error has occurred, retry the operation")
 
 def upload(file):
