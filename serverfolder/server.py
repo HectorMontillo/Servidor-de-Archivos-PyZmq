@@ -85,7 +85,6 @@ class Chord_Server:
 		if (self.successor_server_address == self.address):
 			print("Ultimo servidor del anillo apagado!")
 		else:
-			print("Servidor Apagado")
 			request = [b'left successor', self.coder.enco(self.predecessor_server_address)]+self.enco_list(self.lim[:-1])
 			response = self.successor_send_request(request)
 			self.log(response,'Response successor')
@@ -93,6 +92,7 @@ class Chord_Server:
 			request = [b'left predecessor', self.coder.enco(self.successor_server_address)]
 			response = self.predecessor_send_request(request)
 			self.log(response, 'Response predecessor')
+			print("Servidor Apagado")
 
 	def generate_name(self,length):
 		return int(self.naming.getHash(self.coder.enco(self.generate_random_string(40))),16)
@@ -121,10 +121,14 @@ class Chord_Server:
 		return response
 
 	def left_to_ring(self, request):
-		self.predecessor_server_address = request[1]
 		newlim = request[2:]+self.lim[1:]
 		self.lim = list(map(int,newlim))
+
+		self.transfer_files(successor=False)
+
+		self.predecessor_server_address = request[1]
 		self.socket.send_multipart([b'left success'])
+		
 
 	def left_predecessor(self,successor_server_address):
 		self.successor_server_address = successor_server_address
@@ -145,9 +149,13 @@ class Chord_Server:
 			self.successor_server_address = self.coder.deco(response[1])
 			self.join_to_ring()
 		
-	def transfer_files(self):
+	def transfer_files(self, successor=True):
 		request = [b'transfer']
-		response = self.successor_send_request(request)
+		if successor:
+			response = self.successor_send_request(request)
+		else:
+			response = self.predecessor_send_request(request)
+
 		self.log(response,'Response successor')
 		if self.coder.deco(response[0]) == 'files':
 			res = self.download_files(self.deco_list(response[1:]))
