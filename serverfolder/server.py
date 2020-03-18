@@ -171,7 +171,7 @@ class Chord_Server:
 	def check_files(self, files):
 		res_files = list()
 		for f in files:
-			if self.check_segment(f):
+			if not self.check_segment(f):
 				res_files.append(f)
 		return res_files
 	
@@ -184,6 +184,7 @@ class Chord_Server:
 				with open("{}/{}".format(self.address,f), 'wb') as f:
 					f.write(response[1])
 			else:
+				self.log(response,'Response successor')
 				return False
 		return True
 
@@ -244,7 +245,7 @@ class Chord_Server:
 			self.socket.send_multipart([b'failure upload', self.coder.enco(self.successor_server_address)])
 
 	def download(self, name_segment, delete = False):
-		if (self.check_segment(name_segment)):
+		if (self.check_segment(name_segment) or delete):
 			try:
 				with open("{}/{}".format(self.address,name_segment), "rb") as f:
 					segment = f.read()
@@ -256,6 +257,7 @@ class Chord_Server:
 				self.socket.send_multipart([b'file not found error'])
 		else:
 			self.socket.send_multipart([b'failure download', self.coder.enco(self.successor_server_address)])
+
 
 	def state(self):
 		state = {
