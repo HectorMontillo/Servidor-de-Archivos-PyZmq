@@ -59,6 +59,10 @@ class Chord_Server:
 				self.left_predecessor(self.coder.deco(request[1]))
 			elif requestAction == 'successor':
 				self.successor_update(self.coder.deco(request[1]))
+			elif requestAction == 'transfer':
+				self.transfer()
+			elif requestAction == 'transfer file':
+				self.download(self.coder.deco(request[1]),delete=True)
 			elif requestAction == 'upload':
 				self.upload(self.coder.deco(request[1]),request[2])
 			elif requestAction == 'download':
@@ -120,8 +124,6 @@ class Chord_Server:
 		self.predecessor_server_address = request[1]
 		newlim = request[2:]+self.lim[1:]
 		self.lim = list(map(int,newlim))
-		print("My lim: ")
-		print(self.lim)
 		self.socket.send_multipart([b'left success'])
 
 	def left_predecessor(self,successor_server_address):
@@ -138,10 +140,53 @@ class Chord_Server:
 			self.lim = list(map(self.deco_and_int, response[1:-1]))
 			self.predecessor_server_address = self.coder.deco(response[-1])
 			self.notify_successor()
+			self.transfer_files()
 		else:
 			self.successor_server_address = self.coder.deco(response[1])
 			self.join_to_ring()
 		
+	def transfer_files(self):
+		request = [b'transfer']
+		response = self.successor_send_request(request)
+		self.log(response,'Response successor')
+		if self.coder.deco(response[0]) == 'files':
+			res = self.download_files(self.deco_list(response[1:]))
+			if res:
+				print('success: Files transfered!')
+			else:
+				print('error: An error has occurred transfering de files!')
+
+	def transfer(self):
+		try:
+			files = os.listdir('{}/'.format(self.address))
+			res_files = self.check_files(self.enco_list(files))
+			if len(res_files):
+				self.socket.send_multipart([b'files']+res_files)
+			else:
+				self.socket.send_multipart([b'not files'])
+
+		except FileNotFoundError:
+			self.socket.send_multipart([b'not files'])
+	
+	def check_files(self, files):
+		res_files = list()
+		for f in files:
+			if self.check_segment(f):
+				res_files.append(f)
+		return res_files
+	
+	def download_files(self, files):
+		self.create_directory()
+		for f in files:
+			request = [b'transfer file', self.coder.enco(f)]
+			response = self.successor_send_request(request)
+			if self.coder.deco(response[0]) == 'success download':
+				with open("{}/{}".format(self.address,f), 'wb') as f:
+					f.write(response[1])
+			else:
+				return False
+		return True
+
 	def join_server(self,server_num, server_address):
 		if (server_num >= self.lim[0] and server_num <= self.lim[1]):
 			res_lim = [self.coder.enco(str(self.lim[0])),self.coder.enco(str(server_num)), self.coder.enco(self.predecessor_server_address)]
@@ -159,9 +204,6 @@ class Chord_Server:
 					self.socket.send_multipart([b"rejoin", self.coder.enco(self.successor_server_address)])
 			except IndexError:
 				self.socket.send_multipart([b"rejoin", self.coder.enco(self.successor_server_address)])
-				
-		print("My lim: ")
-		print(self.lim)
 		
 	def check_segment(self,name_segment):
 		number_segment = int(name_segment,16)
@@ -201,27 +243,20 @@ class Chord_Server:
 		else:
 			self.socket.send_multipart([b'failure upload', self.coder.enco(self.successor_server_address)])
 
-	def download(self, name_segment):
+	def download(self, name_segment, delete = False):
 		if (self.check_segment(name_segment)):
 			try:
 				with open("{}/{}".format(self.address,name_segment), "rb") as f:
 					segment = f.read()
 					self.socket.send_multipart([b'success download',segment])
+
+				if delete:
+					os.remove("{}/{}".format(self.address,name_segment))
 			except FileNotFoundError:
 				self.socket.send_multipart([b'file not found error'])
 		else:
 			self.socket.send_multipart([b'failure download', self.coder.enco(self.successor_server_address)])
 
-		'''
-		try:
-			print(name_segment)
-			with open("{}/{}".format(self.address,name_segment), "rb") as f:
-				segment = f.read()
-				self.socket.send_multipart([b'success',segment])
-		except FileNotFoundError:
-	
-			self.socket.send_multipart([b'file not found error'])
-		'''
 	def state(self):
 		state = {
 			'name': str(self.name),
@@ -253,11 +288,19 @@ class Chord_Server:
 	
 	def log(self,req, att='General Socket'):
 		print("{}: {}".format(self.coder.deco(req[0]),att))
+		cont = 1
 		for i in req[1:]:
 			try:
-				print("--> "+self.coder.deco(i))
+				i = self.coder.deco(i)
 			except:
-				print("--> Binary data")
+				i = 'Binary data'
+
+			if len(i) > 40:
+				i = i[0:10]+'...'
+
+			print(str(cont) + " --> "+i)
+			cont += 1
+			
 
 if __name__ == "__main__":
 	server_address = sys.argv[1]
