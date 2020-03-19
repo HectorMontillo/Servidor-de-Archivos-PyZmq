@@ -3,6 +3,7 @@ import sys
 import hashlib 
 import os
 import random
+from shutil import rmtree
 
 LIMIT = (2**160)-1
 
@@ -61,8 +62,8 @@ class Chord_Server:
 				self.successor_update(self.coder.deco(request[1]))
 			elif requestAction == 'transfer':
 				self.transfer()
-			elif requestAction == 'transfer left':
-				print("Adios bebe")
+			elif requestAction == 'upload transfer file':
+				self.upload(self.coder.deco(request[1]),request[2],excep=True)
 			elif requestAction == 'transfer file':
 				self.download(self.coder.deco(request[1]),delete=True)
 			elif requestAction == 'upload':
@@ -88,6 +89,7 @@ class Chord_Server:
 			print("Ultimo servidor del anillo apagado!")
 		else:
 			self.transfer_files_left()
+
 			request = [b'left successor', self.coder.enco(self.predecessor_server_address)]+self.enco_list(self.lim[:-1])
 			response = self.successor_send_request(request)
 			self.log(response,'Response successor')
@@ -129,7 +131,6 @@ class Chord_Server:
 		self.predecessor_server_address = request[1]
 		self.socket.send_multipart([b'left success'])
 		
-
 	def left_predecessor(self,successor_server_address):
 		self.successor_server_address = successor_server_address
 		self.socket.send_multipart([b'left success'])
@@ -153,6 +154,10 @@ class Chord_Server:
 		try:
 			files = os.listdir('{}/'.format(self.address))
 			res = self.upload_files(files)
+			if not res:
+				print('error: An error has occurred transfering files to left')
+			else:
+				rmtree('{}/'.format(self.address))
 		except FileNotFoundError:
 			print("There aren't files to tranfer")
 
@@ -160,12 +165,14 @@ class Chord_Server:
 		for name_file in files:
 			with open("{}/{}".format(self.address,name_file), "rb") as f:
 				data = f.read()
-				request = [b'upload transfer file', data]
+				request = [b'upload transfer file', self.coder.enco(name_file),data]
 				response = self.successor_send_request(request)
-				#-------------- sin terminar
+				if not self.coder.deco(response[0]) == 'success upload':
+					return False
+				else:
+					print("Trasfered: "+ name_file)
+		return True
 				
-
-
 	def transfer_files(self, successor=True):
 		request = [b'transfer']
 		if successor:
@@ -265,8 +272,8 @@ class Chord_Server:
 		with open("{}/{}".format(self.address,name_segment), "wb") as f:
 			f.write(segment)
 
-	def upload(self, name_segment, segment):
-		if (self.check_segment(name_segment)):
+	def upload(self, name_segment, segment, excep=False):
+		if (self.check_segment(name_segment) or excep):
 			self.create_segment(name_segment, segment)
 			self.socket.send_multipart([b'success upload'])
 		else:
@@ -285,7 +292,6 @@ class Chord_Server:
 				self.socket.send_multipart([b'file not found error'])
 		else:
 			self.socket.send_multipart([b'failure download', self.coder.enco(self.successor_server_address)])
-
 
 	def state(self):
 		state = {
