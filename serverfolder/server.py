@@ -68,6 +68,8 @@ class Chord_Server:
 				self.download(self.coder.deco(request[1]),delete=True)
 			elif requestAction == 'upload':
 				self.upload(self.coder.deco(request[1]),request[2])
+			elif requestAction == 'upload chord file':
+				self.upload(self.coder.deco(request[1]),request[2], chord_file=True)
 			elif requestAction == 'download':
 				self.download(self.coder.deco(request[1]))
 			elif requestAction == 'list':
@@ -267,15 +269,26 @@ class Chord_Server:
 		self.successor_server_address = address
 		self.socket.send_multipart([b'success update'])
 
-	def create_segment(self, name_segment, segment):
+	def create_segment(self, name_segment, segment, chord_file=False):
 		self.create_directory()
-		with open("{}/{}".format(self.address,name_segment), "wb") as f:
-			f.write(segment)
+		pathfile = "{}/{}".format(self.address,name_segment)
+		if os.path.exists(pathfile):
+			if chord_file:
+				return False
+			else:
+				return True
+		else:
+			with open(pathfile, "wb") as f:
+				f.write(segment)
+				return True
 
-	def upload(self, name_segment, segment, excep=False):
+	def upload(self, name_segment, segment, excep=False, chord_file=False):
 		if (self.check_segment(name_segment) or excep):
-			self.create_segment(name_segment, segment)
-			self.socket.send_multipart([b'success upload'])
+			res = self.create_segment(name_segment, segment, chord_file=chord_file)
+			if res:
+				self.socket.send_multipart([b'success upload'])
+			else:
+				self.socket.send_multipart([b'chord file exist'])
 		else:
 			self.socket.send_multipart([b'failure upload', self.coder.enco(self.successor_server_address)])
 
@@ -317,7 +330,8 @@ class Chord_Server:
 			os.mkdir(self.address)
 			print("Directory " , self.address ,  " Created ") 
 		except FileExistsError:
-			print("Using", self.address, "directory")
+			#print("Using", self.address, "directory")
+			pass
 
 	def encode_name(self,i=0):
 		return self.coder.enco(str(self.name+i))
@@ -332,7 +346,7 @@ class Chord_Server:
 				i = 'Binary data'
 
 			if len(i) > 40:
-				i = i[0:10]+'...'
+				i = i.replace('\n',' ')[0:10]+'...'
 
 			print(str(cont) + " --> "+i)
 			cont += 1
